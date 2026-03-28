@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const [,, cmd, ...rest] = process.argv
 const url = process.env.AIRI_WS_URL || 'ws://127.0.0.1:6121/ws'
 const target = process.env.OPENCLAW_TO || '+16473668191'
 const openclawBin = process.env.OPENCLAW_BIN || 'openclaw'
 const timeoutSec = process.env.OPENCLAW_TIMEOUT || '120'
+const localAudioBase = process.env.AIRI_LOCAL_AUDIO_BASE || 'http://127.0.0.1:4319'
+const speakReplies = process.env.AIRI_BRIDGE_SPEAK !== '0'
 
 function usage() {
   console.log(`Usage:
@@ -97,6 +102,31 @@ function callOpenClaw(message) {
   })
 }
 
+async function speakText(text) {
+  if (!speakReplies || !text?.trim())
+    return
+
+  const form = new FormData()
+  form.set('model', 'kitten-1')
+  form.set('voice', process.env.KITTEN_VOICE || 'Rosie')
+  form.set('input', text)
+
+  const res = await fetch(`${localAudioBase}/v1/audio/speech`, { method: 'POST', body: form })
+  if (!res.ok)
+    throw new Error(`local audio server failed: ${res.status} ${await res.text()}`)
+
+  const audio = Buffer.from(await res.arrayBuffer())
+  const dir = mkdtempSync(join(tmpdir(), 'airi-bridge-'))
+  const out = join(dir, 'reply.wav')
+  await import('node:fs/promises').then(fs => fs.writeFile(out, audio))
+
+  await new Promise((resolve, reject) => {
+    const player = spawn('afplay', [out], { stdio: 'ignore' })
+    player.on('error', reject)
+    player.on('close', code => code === 0 ? resolve() : reject(new Error(`afplay exited ${code}`)))
+  })
+}
+
 if (!cmd || ['-h', '--help', 'help'].includes(cmd)) {
   usage()
   process.exit(0)
@@ -172,6 +202,7 @@ ws.addEventListener('message', async (ev) => {
     for (const envelope of assistantEvent(normalized, msg.data || { text })) {
       ws.send(JSON.stringify(envelope))
     }
+    await speakText(normalized)
     console.log(`OpenClaw -> AIRI: ${normalized.slice(0, 160)}`)
   }
   catch (error) {
