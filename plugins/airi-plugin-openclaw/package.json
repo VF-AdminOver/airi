@@ -1,0 +1,23 @@
+{
+  "name": "@proj-airi/airi-plugin-openclaw",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal AIRI bridge for OpenClaw",
+  "bin": {
+    "airi-plugin-openclaw": "./dist/run.js"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsx ./src/run.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@guiiai/logg": "catalog:",
+    "@proj-airi/server-sdk": "workspace:*",
+    "cac": "^7.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0"
+  }
+}
